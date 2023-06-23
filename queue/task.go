@@ -43,22 +43,21 @@ type TaskEntry struct {
 
 func DefaultRetry() RetryFunc {
 	return func(tf *TaskEntry) error {
+		// when multi channels are available,
+		// the go runtime will select it randomly.
+		// however, we must ensure the stop signal is first,
+		// otherwise, this goroutine will be paused by the ticker channel.
+		select {
+		case <-tf.stop.Done():
+			return ErrTaskStopped
+		default:
+		}
+
 		sleep := time.NewTicker(time.Second)
 		defer sleep.Stop()
 
 		for i := 0; i < tf.retryLimit; i++ {
-
-			// when multi channels are available,
-			// the go runtime will select it randomly.
-			// however, we must ensure the stop signal is first,
-			// otherwise, this goroutine will be paused by the ticker channel.
-			select {
-			case <-tf.stop.Done():
-				return ErrTaskStopped
-			default:
-			}
-
-			// may be paused
+			// may be woken up by stop signal or the ticker.
 			select {
 			case <-tf.stop.Done():
 				return ErrTaskStopped
