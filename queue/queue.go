@@ -17,6 +17,7 @@ type Queue interface {
 	Resize(int) bool
 	Cap() int
 	Len() int
+	Free() int
 }
 
 type Options func(queue Queue)

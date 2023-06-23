@@ -3,6 +3,7 @@ package queue
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,6 +23,7 @@ type Task interface {
 	ID() string
 	IsRunUntilSuccess() bool
 	Stop()
+	IsDone() bool
 }
 type TaskOptions func(*TaskEntry)
 type TaskFunc func() error
@@ -35,30 +37,38 @@ type TaskEntry struct {
 	retryLimit      int
 	stop            context.Context
 	doStop          context.CancelFunc
+	done            atomic.Bool
 	runUntilSuccess bool
 }
 
 func DefaultRetry() RetryFunc {
 	return func(tf *TaskEntry) error {
-		sleep := time.NewTimer(time.Second)
+		sleep := time.NewTicker(time.Second)
 		defer sleep.Stop()
 
 		for i := 0; i < tf.retryLimit; i++ {
+
+			// when multi channels are available,
+			// the go runtime will select it randomly.
+			// however, we must ensure the stop signal is first,
+			// otherwise, this goroutine will be paused by the ticker channel.
+			select {
+			case <-tf.stop.Done():
+				return ErrTaskStopped
+			default:
+			}
+
+			<-sleep.C
+
 			if err := tf.task(); err == nil {
 				return nil
 			}
 
-			select {
-			case <-tf.stop.Done():
-				return ErrTaskStopped
-			case <-sleep.C:
-				// max retry sleep:
-				// first time: 1 seconds
-				// and then 2 seconds,  4 seconds,  8 seconds,  16 seconds, 32 seconds.
-				// Totally, 1+2+4+8+16+32=63 seconds = 1 Minute 3 Second
-				sleep.Reset(1 << (i + 1) * time.Second)
-			}
-
+			// max retry sleep:
+			// first time: 1 seconds
+			// and then 2 seconds,  4 seconds,  8 seconds,  16 seconds, 32 seconds.
+			// Totally, 1+2+4+8+16+32=63 seconds = 1 Minute 3 Second
+			sleep.Reset(1 << (i + 1) * time.Second)
 		}
 		return ErrRetryReachLimits
 	}
@@ -79,6 +89,8 @@ func WithRetryFunc(retry RetryFunc) TaskOptions {
 	}
 }
 
+// when the custom RetryFunc is set,
+// the retry limit will be ignored.
 func WithRetryLimit(retry int) TaskOptions {
 	return func(te *TaskEntry) {
 		te.retryLimit = retry
@@ -134,9 +146,12 @@ func (t *TaskEntry) Do() error {
 		if err := t.task(); err != nil {
 			// saved the error for the fail fast case.
 			t.taskErr = err
-			return t.retryFunc(t)
+			if err = t.retryFunc(t); err != nil {
+				return err
+			}
 		}
 	}
+	t.done.Store(true)
 	return nil
 }
 func (t *TaskEntry) Stop() {
@@ -149,4 +164,8 @@ func (t *TaskEntry) ID() string {
 
 func (t *TaskEntry) IsRunUntilSuccess() bool {
 	return t.runUntilSuccess
+}
+
+func (t *TaskEntry) IsDone() bool {
+	return t.done.Load()
 }

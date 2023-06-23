@@ -44,6 +44,12 @@ func (f *FairQueue) Len() int {
 	return f.cap
 }
 
+func (f *FairQueue) Free() int {
+	f.RLock()
+	defer f.RUnlock()
+	return f.cap
+}
+
 func (f *FairQueue) IsClosed() bool {
 	return false
 }

@@ -68,6 +68,10 @@ func (s *SimpleQueue) Len() int {
 	return len(s.taskQueue)
 }
 
+func (s *SimpleQueue) Free() int {
+	return cap(s.taskQueue) - len(s.taskQueue)
+}
+
 func (s *SimpleQueue) IsClosed() bool {
 	s.closeRW.RLock()
 	defer s.closeRW.RUnlock()
@@ -77,7 +81,7 @@ func (s *SimpleQueue) IsClosed() bool {
 // close wait until all tasks are executed.
 func (s *SimpleQueue) Close() {
 	s.closeRW.Lock()
-	s.isClosed = false
+	s.isClosed = true
 	// wake up the subscribers
 	close(s.taskQueue)
 	s.closeRW.Unlock()
