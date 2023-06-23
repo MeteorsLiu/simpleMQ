@@ -58,7 +58,12 @@ func DefaultRetry() RetryFunc {
 			default:
 			}
 
-			<-sleep.C
+			// may be paused
+			select {
+			case <-tf.stop.Done():
+				return ErrTaskStopped
+			case <-sleep.C:
+			}
 
 			if err := tf.task(); err == nil {
 				return nil
