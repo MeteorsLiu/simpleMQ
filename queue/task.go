@@ -3,7 +3,6 @@ package queue
 import (
 	"context"
 	"fmt"
-	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,6 +23,7 @@ type Task interface {
 	IsRunUntilSuccess() bool
 	Stop()
 	IsDone() bool
+	OnDone(...func())
 }
 type TaskOptions func(*TaskEntry)
 type TaskFunc func() error
@@ -37,7 +37,7 @@ type TaskEntry struct {
 	retryLimit      int
 	stop            context.Context
 	doStop          context.CancelFunc
-	done            atomic.Bool
+	onTaskDone      []func()
 	runUntilSuccess bool
 }
 
@@ -109,19 +109,22 @@ func WithRunUntilSuccess(RunUntilSuccess bool) TaskOptions {
 	}
 }
 
+func WithOnTaskDone(f func()) TaskOptions {
+	return func(te *TaskEntry) {
+		te.onTaskDone = append(te.onTaskDone, f)
+	}
+}
+
 func NewTask(task TaskFunc, opts ...TaskOptions) Task {
 	t := &TaskEntry{
 		task:            task,
 		runUntilSuccess: true,
+		retryLimit:      DefaultRetryLimit,
+		retryFunc:       DefaultRetry(),
 	}
+
 	for _, o := range opts {
 		o(t)
-	}
-	if t.retryLimit == 0 {
-		t.retryLimit = DefaultRetryLimit
-	}
-	if t.retryFunc == nil {
-		t.retryFunc = DefaultRetry()
 	}
 	if t.stop == nil || t.doStop == nil {
 		t.stop, t.doStop = context.WithCancel(context.Background())
@@ -145,10 +148,13 @@ func (t *TaskEntry) Do() error {
 			}
 		}
 	}
-	t.done.Store(true)
+	t.Stop()
 	return nil
 }
 func (t *TaskEntry) Stop() {
+	for _, f := range t.onTaskDone {
+		f()
+	}
 	t.doStop()
 }
 
@@ -161,5 +167,14 @@ func (t *TaskEntry) IsRunUntilSuccess() bool {
 }
 
 func (t *TaskEntry) IsDone() bool {
-	return t.done.Load()
+	select {
+	case <-t.stop.Done():
+		return true
+	default:
+		return false
+	}
+}
+
+func (t *TaskEntry) OnDone(f ...func()) {
+	t.onTaskDone = append(t.onTaskDone, f...)
 }

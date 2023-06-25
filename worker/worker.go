@@ -9,16 +9,24 @@ import (
 
 type Worker struct {
 	workerQueue queue.Queue
+	pollMap     *queue.PollTask
 	kill        chan struct{}
 	sem         chan struct{}
 	working     atomic.Int64
+	enablePoll  bool
 }
 
-func NewWorker(n int, queue queue.Queue) *Worker {
+func NewWorker(n int, q queue.Queue, enablePoll ...bool) *Worker {
 	w := &Worker{
-		workerQueue: queue,
+		workerQueue: q,
 		kill:        make(chan struct{}, n),
 		sem:         make(chan struct{}, n),
+	}
+	if len(enablePoll) > 0 {
+		if enablePoll[0] {
+			w.enablePoll = true
+			w.pollMap = queue.NewPoll()
+		}
 	}
 	for i := 0; i < n; i++ {
 		w.sem <- struct{}{}
@@ -48,12 +56,9 @@ func (w *Worker) Run(idx int) {
 					task.ID(),
 					err,
 				)
-				if task.IsRunUntilSuccess() {
+				if task.IsRunUntilSuccess() && !task.IsDone() && !w.workerQueue.IsClosed() {
 					log.Printf("Task: %s is going to re-run", task.ID())
-					if !w.workerQueue.Publish(task) && w.workerQueue.IsClosed() {
-						w.working.Add(-1)
-						return
-					}
+					w.workerQueue.Publish(task)
 				}
 			}
 			w.working.Add(-1)
@@ -61,11 +66,21 @@ func (w *Worker) Run(idx int) {
 	}
 }
 
-func (w *Worker) Publish(task queue.Task) bool {
+func (w *Worker) Publish(task queue.Task, callback ...func()) bool {
 	select {
 	case w.sem <- struct{}{}:
 		go w.Run(len(w.sem))
 	default:
+	}
+	// all the callback function should be registered
+	// before it starts to run!
+
+	if w.enablePoll {
+		w.pollMap.Register(task)
+	}
+
+	if len(callback) > 0 {
+		task.OnDone(callback...)
 	}
 	return w.workerQueue.Publish(task)
 }
@@ -82,4 +97,9 @@ func (w *Worker) Stop() {
 
 func (w *Worker) Working() int {
 	return int(w.working.Load())
+}
+
+func (w *Worker) SetQueue(q queue.Queue) {
+	w.workerQueue.Close()
+	w.workerQueue = q
 }
