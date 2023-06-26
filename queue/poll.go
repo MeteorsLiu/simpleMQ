@@ -44,10 +44,11 @@ func (p *PollTask) PollOne(id string) (bool, error) {
 }
 
 func (p *PollTask) Poll(f func(string, Pollable)) {
-	p.m.ForEach(func(id string, pb Pollable) {
+	p.m.ForEach(func(id string, pb Pollable) bool {
 		if pb.IsDone() {
 			f(id, pb)
 		}
+		return true
 	})
 }
 
