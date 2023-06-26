@@ -16,8 +16,6 @@ type PID struct {
 	m   uintptr
 }
 
-//go:linkname preemptM runtime.preemptM
-func preemptM(mp uintptr)
 func TestKill(t *testing.T) {
 	var wg sync.WaitGroup
 	tgid := make(chan *PID)
@@ -42,7 +40,7 @@ func TestKill(t *testing.T) {
 
 		t.Log(syscall.Getpid(), syscall.Gettid(), id.pid, id.tid)
 		time.AfterFunc(10*time.Second, func() {
-			preemptM(id.m)
+			syscall.Tgkill(id.pid, id.tid, syscall.SIGINT)
 		})
 	}()
 	wg.Wait()
