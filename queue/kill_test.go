@@ -5,6 +5,7 @@ import (
 	"syscall"
 	"testing"
 	"time"
+	_ "unsafe"
 
 	"github.com/MeteorsLiu/getm"
 )
@@ -12,8 +13,11 @@ import (
 type PID struct {
 	pid int
 	tid int
+	m   uintptr
 }
 
+//go:linkname preemptM runtime.preemptM
+func preemptM(mp uintptr)
 func TestKill(t *testing.T) {
 	var wg sync.WaitGroup
 	tgid := make(chan *PID)
@@ -22,7 +26,8 @@ func TestKill(t *testing.T) {
 		defer wg.Done()
 		tgid <- &PID{
 			pid: syscall.Getpid(),
-			tid: int(getm.CustomInM[uint64]("procid")),
+			tid: syscall.Gettid(),
+			m:   getm.GetM(),
 		}
 
 		i := 0
@@ -42,7 +47,7 @@ func TestKill(t *testing.T) {
 
 		t.Log(syscall.Getpid(), syscall.Gettid(), id.pid, id.tid)
 		time.AfterFunc(10*time.Second, func() {
-			syscall.Tgkill(id.pid, id.tid, syscall.SIGSTOP)
+			preemptM(id.m)
 		})
 	}()
 	wg.Wait()
