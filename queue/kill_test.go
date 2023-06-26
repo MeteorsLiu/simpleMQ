@@ -40,7 +40,7 @@ func TestKill(t *testing.T) {
 
 		t.Log(syscall.Getpid(), syscall.Gettid(), id.pid, id.tid)
 		time.AfterFunc(10*time.Second, func() {
-			syscall.Tgkill(id.pid, id.tid, syscall.SIGINT)
+			syscall.Tgkill(id.pid, id.tid, syscall.SIGSTOP)
 		})
 	}()
 	wg.Wait()
