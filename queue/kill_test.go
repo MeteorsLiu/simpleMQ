@@ -5,6 +5,7 @@ import (
 	"syscall"
 	"testing"
 	"time"
+	"unsafe"
 	_ "unsafe"
 
 	"github.com/MeteorsLiu/getm"
@@ -14,7 +15,11 @@ type PID struct {
 	pid int
 	tid int
 	m   uintptr
+	g   uintptr
 }
+
+//go:linkname suspendG runtime.suspendG
+func suspendG(unsafe.Pointer)
 
 func TestKill(t *testing.T) {
 	var wg sync.WaitGroup
@@ -26,6 +31,7 @@ func TestKill(t *testing.T) {
 			pid: syscall.Getpid(),
 			tid: syscall.Gettid(),
 			m:   getm.GetM(),
+			g:   getm.GetG(),
 		}
 
 		for {
@@ -40,7 +46,7 @@ func TestKill(t *testing.T) {
 
 		t.Log(syscall.Getpid(), syscall.Gettid(), id.pid, id.tid)
 		time.AfterFunc(10*time.Second, func() {
-			syscall.Tgkill(id.pid, id.tid, syscall.SIGTERM)
+			suspendG(unsafe.Pointer(id.g))
 		})
 	}()
 	wg.Wait()
