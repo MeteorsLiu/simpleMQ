@@ -15,7 +15,7 @@ type PID struct {
 func TestKill(t *testing.T) {
 	var wg sync.WaitGroup
 	tgid := make(chan *PID)
-	wg.Add(1)
+	wg.Add(2)
 	go func() {
 		defer wg.Done()
 		tgid <- &PID{
@@ -34,12 +34,15 @@ func TestKill(t *testing.T) {
 		}
 
 	}()
-	id := <-tgid
+	go func() {
+		defer wg.Done()
+		id := <-tgid
 
-	t.Log(syscall.Getpid(), syscall.Gettid(), id.pid, id.tid)
-	time.AfterFunc(10*time.Second, func() {
-		syscall.Tgkill(id.pid, id.tid, syscall.SIGINT)
-	})
+		t.Log(syscall.Getpid(), syscall.Gettid(), id.pid, id.tid)
+		time.AfterFunc(10*time.Second, func() {
+			syscall.Tgkill(id.pid, id.tid, syscall.SIGINT)
+		})
+	}()
 	wg.Wait()
 	t.Log("exit")
 	t.Log("main is still running")
