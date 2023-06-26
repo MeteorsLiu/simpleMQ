@@ -31,14 +31,7 @@ func TestKill(t *testing.T) {
 		}
 
 		i := 0
-		ticker := time.NewTicker(time.Second)
-		for {
-			select {
-			case <-ticker.C:
-				i++
-				t.Log(i)
-			}
-		}
+		i++
 
 	}()
 	go func() {
