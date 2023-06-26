@@ -19,7 +19,7 @@ func TestKill(t *testing.T) {
 		tgid <- syscall.Gettid()
 
 		sig := make(chan os.Signal)
-		signal.Notify(sig, syscall.SIGINT)
+		signal.Notify(sig, syscall.SIGSTOP)
 		ticker := time.NewTicker(time.Second)
 		i := 0
 		for {
