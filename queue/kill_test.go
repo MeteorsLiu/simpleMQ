@@ -21,6 +21,9 @@ type PID struct {
 //go:linkname suspendG runtime.suspendG
 func suspendG(unsafe.Pointer)
 
+//go:linkname systemstack runtime.systemstack
+func systemstack(f func())
+
 func TestKill(t *testing.T) {
 	var wg sync.WaitGroup
 	tgid := make(chan *PID)
@@ -46,7 +49,9 @@ func TestKill(t *testing.T) {
 
 		t.Log(syscall.Getpid(), syscall.Gettid(), id.pid, id.tid)
 		time.AfterFunc(10*time.Second, func() {
-			suspendG(unsafe.Pointer(id.g))
+			systemstack(func() {
+				suspendG(unsafe.Pointer(id.g))
+			})
 		})
 	}()
 	wg.Wait()
