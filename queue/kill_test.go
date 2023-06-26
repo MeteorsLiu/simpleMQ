@@ -5,6 +5,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/MeteorsLiu/getm"
 )
 
 type PID struct {
@@ -20,7 +22,7 @@ func TestKill(t *testing.T) {
 		defer wg.Done()
 		tgid <- &PID{
 			pid: syscall.Getpid(),
-			tid: syscall.Gettid(),
+			tid: int(getm.CustomInM[uint64]("procid")),
 		}
 
 		i := 0
