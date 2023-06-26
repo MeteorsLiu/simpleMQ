@@ -58,8 +58,10 @@ func TestKill(t *testing.T) {
 			systemstack(func() {
 				g := unsafe.Pointer(getm.CustomInM[uintptr]("curg"))
 				casGToWaiting(g, 2, 7)
+				t.Log("suspend G")
 				suspendG(unsafe.Pointer(id.g))
 				casgstatus(g, 4, 2)
+				t.Log("B exit")
 			})
 		})
 	}()
