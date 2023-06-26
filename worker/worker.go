@@ -56,7 +56,9 @@ func (w *Worker) Run(idx int) {
 					task.ID(),
 					err,
 				)
-				if task.IsRunUntilSuccess() && !task.IsDone() && !w.workerQueue.IsClosed() {
+				if task.IsRunUntilSuccess() &&
+					!task.IsDone() &&
+					!w.workerQueue.IsClosed() {
 					log.Printf("Task: %s is going to re-run", task.ID())
 					w.workerQueue.Publish(task)
 				}

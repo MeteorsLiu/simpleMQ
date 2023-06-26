@@ -60,3 +60,12 @@ func (p *PollTask) Callback(id string, f func()) error {
 	pb.OnDone(f)
 	return nil
 }
+
+func (p *PollTask) Kill(id string) error {
+	pb, ok := p.m.Get(id)
+	if !ok {
+		return ErrPollableEventsNotExists
+	}
+	pb.Stop()
+	return nil
+}
