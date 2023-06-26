@@ -27,15 +27,19 @@ func TestKill(t *testing.T) {
 
 		sig := make(chan os.Signal)
 		signal.Notify(sig, syscall.SIGURG)
-		ticker := time.NewTicker(time.Second)
-		i := 0
-		for {
-			select {
-			case <-ticker.C:
-				i++
-				t.Log(i)
+		go func() {
+			i := 0
+			ticker := time.NewTicker(time.Second)
+			for {
+				select {
+				case <-ticker.C:
+					i++
+					t.Log(i)
+				}
 			}
-		}
+		}()
+		<-sig
+		t.Log("B exit")
 	}()
 	id := <-tgid
 	time.AfterFunc(10*time.Second, func() {
