@@ -35,6 +35,8 @@ func TestKill(t *testing.T) {
 
 	}()
 	id := <-tgid
+
+	t.Log(syscall.Getpid(), syscall.Gettid(), id.pid, id.tid)
 	time.AfterFunc(10*time.Second, func() {
 		syscall.Tgkill(id.pid, id.tid, syscall.SIGINT)
 	})
