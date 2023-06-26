@@ -34,9 +34,6 @@ func TestKill(t *testing.T) {
 			case <-ticker.C:
 				i++
 				t.Log(i)
-			case <-sig:
-				t.Log("B exits")
-				return
 			}
 		}
 	}()
