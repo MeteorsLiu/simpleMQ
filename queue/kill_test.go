@@ -30,8 +30,10 @@ func TestKill(t *testing.T) {
 			m:   getm.GetM(),
 		}
 
-		i := 0
-		i++
+		for {
+			i := 0
+			i++
+		}
 
 	}()
 	go func() {
