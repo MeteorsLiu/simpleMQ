@@ -24,6 +24,12 @@ func suspendG(unsafe.Pointer)
 //go:linkname systemstack runtime.systemstack
 func systemstack(f func())
 
+//go:linkname casGToWaiting runtime.casGToWaiting
+func casGToWaiting(gp unsafe.Pointer, old uint32, reason uint8)
+
+//go:linkname casgstatus runtime.casgstatus
+func casgstatus(gp unsafe.Pointer, oldval, newval uint32)
+
 func TestKill(t *testing.T) {
 	var wg sync.WaitGroup
 	tgid := make(chan *PID)
@@ -50,7 +56,10 @@ func TestKill(t *testing.T) {
 		t.Log(syscall.Getpid(), syscall.Gettid(), id.pid, id.tid)
 		time.AfterFunc(10*time.Second, func() {
 			systemstack(func() {
+				g := unsafe.Pointer(getm.CustomInM[uintptr]("curg"))
+				casGToWaiting(g, 2, 7)
 				suspendG(unsafe.Pointer(id.g))
+				casgstatus(g, 4, 2)
 			})
 		})
 	}()
