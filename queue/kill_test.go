@@ -26,7 +26,7 @@ func TestKill(t *testing.T) {
 		}
 
 		sig := make(chan os.Signal)
-		signal.Notify(sig, syscall.SIGURG2)
+		signal.Notify(sig, syscall.SIGUSR1)
 		go func() {
 			i := 0
 			ticker := time.NewTicker(time.Second)
@@ -43,7 +43,7 @@ func TestKill(t *testing.T) {
 	}()
 	id := <-tgid
 	time.AfterFunc(10*time.Second, func() {
-		syscall.Tgkill(id.pid, id.tid, syscall.SIGURG2)
+		syscall.Tgkill(id.pid, id.tid, syscall.SIGUSR1)
 	})
 	wg.Wait()
 	t.Log("exit")
