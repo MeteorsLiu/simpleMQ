@@ -1,8 +1,6 @@
 package queue
 
 import (
-	"os"
-	"os/signal"
 	"sync"
 	"syscall"
 	"testing"
@@ -25,25 +23,20 @@ func TestKill(t *testing.T) {
 			tid: syscall.Gettid(),
 		}
 
-		sig := make(chan os.Signal)
-		signal.Notify(sig, syscall.SIGUSR1)
-		go func() {
-			i := 0
-			ticker := time.NewTicker(time.Second)
-			for {
-				select {
-				case <-ticker.C:
-					i++
-					t.Log(i)
-				}
+		i := 0
+		ticker := time.NewTicker(time.Second)
+		for {
+			select {
+			case <-ticker.C:
+				i++
+				t.Log(i)
 			}
-		}()
-		<-sig
-		t.Log("B exit")
+		}
+
 	}()
 	id := <-tgid
 	time.AfterFunc(10*time.Second, func() {
-		syscall.Tgkill(id.pid, id.tid, syscall.SIGUSR1)
+		syscall.Tgkill(id.pid, id.tid, syscall.SIGINT)
 	})
 	wg.Wait()
 	t.Log("exit")
