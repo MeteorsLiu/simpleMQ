@@ -48,4 +48,6 @@ func TestKill(t *testing.T) {
 	wg.Wait()
 	t.Log("exit")
 	t.Log("main is still running")
+	time.Sleep(5 * time.Second)
+	t.Log("main exits")
 }
