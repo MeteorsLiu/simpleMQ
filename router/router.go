@@ -57,7 +57,9 @@ func NewRouter(opts ...Options) *Router {
 	if r.workerSize == 0 {
 		r.workerSize = DefaultWorkerSize
 	}
-
+	if r.workerSpawnSize == 0 {
+		r.workerSpawnSize = DefaultWorkerSpwanSize
+	}
 	if r.newQueueFunc == nil {
 		r.newQueueFunc = queue.NewSimpleQueue
 	}
