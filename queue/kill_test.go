@@ -1,5 +1,8 @@
 package queue
 
+// the following test is NOT stable.
+// DON'T USE
+
 import (
 	"sync"
 	"syscall"

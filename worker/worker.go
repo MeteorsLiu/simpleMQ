@@ -16,7 +16,7 @@ type Worker struct {
 	enablePoll  bool
 }
 
-func NewWorker(n int, q queue.Queue, enablePoll ...bool) *Worker {
+func NewWorker(n, spwan int, q queue.Queue, enablePoll ...bool) *Worker {
 	w := &Worker{
 		workerQueue: q,
 		kill:        make(chan struct{}, n),
@@ -28,7 +28,7 @@ func NewWorker(n int, q queue.Queue, enablePoll ...bool) *Worker {
 			w.pollMap = queue.NewPoll()
 		}
 	}
-	for i := 0; i < n; i++ {
+	for i := 0; i < spwan; i++ {
 		w.sem <- struct{}{}
 		go w.Run(i + 1)
 	}

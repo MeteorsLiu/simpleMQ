@@ -10,7 +10,8 @@ import (
 )
 
 const (
-	DefaultWorkerSize = 100
+	DefaultWorkerSize      = 100
+	DefaultWorkerSpwanSize = 10
 )
 
 type Options func(*Router)
@@ -33,12 +34,19 @@ func WithWorkerSize(size int) Options {
 	}
 }
 
+func WithWorkerSpwanSize(spwan int) Options {
+	return func(r *Router) {
+		r.workerSpawnSize = spwan
+	}
+}
+
 type Router struct {
 	sync.RWMutex
-	workerSize   int
-	workersCap   int
-	workers      []*worker.Worker
-	newQueueFunc queue.NewQueue
+	workerSize      int
+	workerSpawnSize int
+	workersCap      int
+	workers         []*worker.Worker
+	newQueueFunc    queue.NewQueue
 }
 
 func NewRouter(opts ...Options) *Router {
@@ -62,7 +70,7 @@ func (r *Router) setupWorker() *worker.Worker {
 	if len(r.workers) >= r.workersCap && r.workersCap > 0 {
 		return nil
 	}
-	newWorker := worker.NewWorker(r.workerSize, r.newQueueFunc(), true)
+	newWorker := worker.NewWorker(r.workerSize, r.workerSpawnSize, r.newQueueFunc(), true)
 	r.workers = append(r.workers, newWorker)
 
 	return newWorker
