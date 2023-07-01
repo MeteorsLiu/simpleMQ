@@ -65,8 +65,10 @@ func (w *Worker) Run(idx int) {
 						w.workerQueue.Publish(task)
 					}
 				} else {
-					// run once
-					task.Stop()
+					if err != queue.ErrTaskStopped {
+						// run once
+						task.Stop()
+					}
 				}
 			}
 			w.working.Add(-1)
