@@ -24,6 +24,7 @@ type Task interface {
 	Stop()
 	IsDone() bool
 	OnDone(...func())
+	Wait()
 }
 type TaskOptions func(*TaskEntry)
 type TaskFunc func() error
@@ -177,4 +178,8 @@ func (t *TaskEntry) IsDone() bool {
 
 func (t *TaskEntry) OnDone(f ...func()) {
 	t.onTaskDone = append(t.onTaskDone, f...)
+}
+
+func (t *TaskEntry) Wait() {
+	<-t.stop.Done()
 }

@@ -47,3 +47,16 @@ task := r.Dispath(func () error {
 
 result := <-callback
 ```
+
+Or just wait the task:
+
+```
+// dispath a task
+task := r.Dispath(func () error {
+    time.Sleep(5*time.Second)
+    fmt.Println("Hello")
+    return nil
+})
+
+task.Wait()
+```
