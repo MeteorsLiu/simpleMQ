@@ -1,8 +1,8 @@
 # Simple Message Queue
 
-一个简单的，开箱即用的消息队列
+一个简单的，异步的，开箱即用的消息队列
 
-A simple and ready-to-use message queue for golang.
+A simple, asynchronous and ready-to-use message queue for golang.
 
 Example(例子)：
 
