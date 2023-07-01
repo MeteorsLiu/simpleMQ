@@ -63,6 +63,8 @@ func NewRouter(opts ...Options) *Router {
 	if r.newQueueFunc == nil {
 		r.newQueueFunc = queue.NewSimpleQueue
 	}
+	// new one for the task
+	r.setupWorker()
 	return r
 }
 
