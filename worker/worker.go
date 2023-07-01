@@ -120,5 +120,5 @@ func (w *Worker) SetQueue(q queue.Queue) {
 }
 
 func (w *Worker) IsBusy() bool {
-	return w.workerQueue.Free() <= len(w.sem)
+	return w.workerQueue.Free() < cap(w.sem)
 }
