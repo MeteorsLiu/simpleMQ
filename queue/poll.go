@@ -69,3 +69,7 @@ func (p *PollTask) Kill(id string) error {
 	pb.Stop()
 	return nil
 }
+
+func (p *PollTask) Get(id string) (Pollable, bool) {
+	return p.m.Get(id)
+}

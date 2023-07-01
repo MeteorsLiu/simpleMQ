@@ -3,7 +3,6 @@ package queue
 import (
 	"context"
 	"fmt"
-	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -34,10 +33,6 @@ type TaskEntry struct {
 	id              string
 	task            TaskFunc
 	taskErr         error
-	taskRunning     atomic.Int32
-	preemptSig      chan struct{}
-	canPreempt      bool
-	ptrPreemptM     chan uintptr
 	retryFunc       RetryFunc
 	retryLimit      int
 	stop            context.Context
@@ -48,11 +43,8 @@ type TaskEntry struct {
 
 func DefaultRetry() RetryFunc {
 	return func(tf *TaskEntry) error {
-		tf.taskRunning.Add(1)
-		defer tf.taskRunning.Add(-1)
 		sleep := time.NewTicker(time.Second)
 		defer sleep.Stop()
-		errCh := make(chan string)
 
 		for i := 0; i < tf.retryLimit; i++ {
 			// may be woken up by stop signal or the ticker.
@@ -62,23 +54,8 @@ func DefaultRetry() RetryFunc {
 			case <-sleep.C:
 			}
 
-			go func() {
-				if tf.canPreempt {
-
-				}
-				if err := tf.task(); err == nil {
-					errCh <- ""
-				} else {
-					errCh <- err.Error()
-				}
-			}()
-
-			select {
-			case err := <-errCh:
-				if err == "" {
-					return nil
-				}
-			case <-tf.preemptSig:
+			if err := tf.task(); err == nil {
+				return nil
 			}
 
 			// max retry sleep:
@@ -103,7 +80,6 @@ func WithNoRetryFunc() TaskOptions {
 func WithRetryFunc(retry RetryFunc) TaskOptions {
 	return func(te *TaskEntry) {
 		te.retryFunc = retry
-		te.canPreempt = false
 	}
 }
 
@@ -143,8 +119,6 @@ func NewTask(task TaskFunc, opts ...TaskOptions) Task {
 	t := &TaskEntry{
 		task:            task,
 		runUntilSuccess: true,
-		canPreempt:      true,
-		ptrPreemptM:     make(chan uintptr, 1),
 		retryLimit:      DefaultRetryLimit,
 		retryFunc:       DefaultRetry(),
 	}

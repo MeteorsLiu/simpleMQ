@@ -49,6 +49,9 @@ func (w *Worker) Run(idx int) {
 			if !ok {
 				return
 			}
+			if task.IsDone() {
+				continue
+			}
 			w.working.Add(1)
 			if err := task.Do(); err != nil {
 				log.Printf("Worker ID: %d Execute Task: %s Fail: %v",
@@ -56,11 +59,14 @@ func (w *Worker) Run(idx int) {
 					task.ID(),
 					err,
 				)
-				if task.IsRunUntilSuccess() &&
-					!task.IsDone() &&
-					!w.workerQueue.IsClosed() {
-					log.Printf("Task: %s is going to re-run", task.ID())
-					w.workerQueue.Publish(task)
+				if task.IsRunUntilSuccess() {
+					if !task.IsDone() && !w.workerQueue.IsClosed() {
+						log.Printf("Task: %s is going to re-run", task.ID())
+						w.workerQueue.Publish(task)
+					}
+				} else {
+					// run once
+					task.Stop()
 				}
 			}
 			w.working.Add(-1)
@@ -95,6 +101,11 @@ func (w *Worker) Killn(n int) {
 
 func (w *Worker) Stop() {
 	w.Killn(cap(w.sem))
+	w.workerQueue.Close()
+}
+
+func (w *Worker) KillTask(id string) error {
+	return w.pollMap.Kill(id)
 }
 
 func (w *Worker) Working() int {
@@ -104,4 +115,8 @@ func (w *Worker) Working() int {
 func (w *Worker) SetQueue(q queue.Queue) {
 	w.workerQueue.Close()
 	w.workerQueue = q
+}
+
+func (w *Worker) IsBusy() bool {
+	return w.workerQueue.Free() <= len(w.sem)
 }

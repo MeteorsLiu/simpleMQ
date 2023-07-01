@@ -21,3 +21,4 @@ type Queue interface {
 }
 
 type Options func(queue Queue)
+type NewQueue func(...Options) Queue

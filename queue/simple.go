@@ -16,7 +16,7 @@ type SimpleQueue struct {
 
 func WithSimpleQueueCap(cap int) Options {
 	return func(queue Queue) {
-		queue.(*SimpleQueue).taskQueue = make(chan Task, cap)
+		queue.Resize(cap)
 	}
 }
 
