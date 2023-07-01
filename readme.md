@@ -38,8 +38,11 @@ realTask := func () (string, error) {
 callback := make(chan string)
 // dispath a task
 task := r.Dispath(func () error {
-    callback <- realTask
-    return nil
+    ret, err := realTask()
+    if err == nil {
+         callback <- ret
+    }
+    return err
 })
 
 result := <-callback
