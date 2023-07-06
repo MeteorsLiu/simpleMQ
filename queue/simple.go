@@ -37,16 +37,15 @@ func (s *SimpleQueue) Resize(capSize int) bool {
 	if s.isClosed {
 		return false
 	}
-	// initialize or fast resize
-	if cap(s.taskQueue) == 0 || len(s.taskQueue) == 0 {
-		s.taskQueue = make(chan Task, capSize)
-		return true
-	}
-	// a hot resize
 	newTaskQueue := make(chan Task, capSize)
 	defer func() {
 		s.taskQueue = newTaskQueue
 	}()
+	// initialize or fast resize
+	if cap(s.taskQueue) == 0 || len(s.taskQueue) == 0 {
+		return true
+	}
+	// a hot resize
 	for {
 		select {
 		case task := <-s.taskQueue:
@@ -138,6 +137,23 @@ func (s *SimpleQueue) Pop() (Task, error) {
 	if s.isClosed {
 		return nil, ErrQueueClosed
 	}
-	task := <-s.taskQueue
+	task, ok := <-s.taskQueue
+	if !ok {
+		return nil, ErrQueueClosed
+	}
 	return task, nil
+}
+
+func (s *SimpleQueue) Copy() []Task {
+	s.closeRW.Lock()
+	defer s.closeRW.Unlock()
+
+	var tasks []Task
+	for i := 0; i < len(s.taskQueue); i++ {
+		task := <-s.taskQueue
+		tasks = append(tasks, task)
+		// don't effect the queue, re-push
+		s.taskQueue <- task
+	}
+	return tasks
 }

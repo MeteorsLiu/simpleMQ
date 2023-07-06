@@ -37,16 +37,14 @@ func NewWorker(n, spwan int, q queue.Queue, enablePoll ...bool) *Worker {
 
 func (w *Worker) Run(idx int) {
 	defer func() { <-w.sem }()
-	wq, err := w.workerQueue.Subscribe()
-	if err != nil {
-		return
-	}
+
 	for {
 		select {
 		case <-w.kill:
 			return
-		case task, ok := <-wq:
-			if !ok {
+		default:
+			task, err := w.workerQueue.Pop()
+			if err != nil {
 				return
 			}
 			if task.IsDone() {

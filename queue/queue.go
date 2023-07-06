@@ -18,6 +18,7 @@ type Queue interface {
 	Cap() int
 	Len() int
 	Free() int
+	Copy() []Task
 }
 
 type Options func(queue Queue)
