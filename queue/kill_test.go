@@ -1,3 +1,5 @@
+//go:build !windows
+
 package queue
 
 // the following test is NOT stable.

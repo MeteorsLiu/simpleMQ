@@ -25,6 +25,7 @@ type Task interface {
 	IsDone() bool
 	OnDone(...func())
 	Wait()
+	String() string
 }
 type TaskOptions func(*TaskEntry)
 type TaskFunc func() error
@@ -182,4 +183,8 @@ func (t *TaskEntry) OnDone(f ...func()) {
 
 func (t *TaskEntry) Wait() {
 	<-t.stop.Done()
+}
+
+func (t *TaskEntry) String() string {
+	return t.ID()
 }

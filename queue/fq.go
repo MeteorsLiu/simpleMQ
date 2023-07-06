@@ -76,3 +76,7 @@ func (f *FairQueue) TryPop() (Task, bool) {
 func (f *FairQueue) Pop() (Task, error) {
 	return nil, nil
 }
+
+func (f *FairQueue) Copy() []Task {
+	return nil
+}
