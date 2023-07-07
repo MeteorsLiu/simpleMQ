@@ -147,7 +147,9 @@ func (s *SimpleQueue) Pop() (Task, error) {
 func (s *SimpleQueue) Copy() []Task {
 	s.closeRW.Lock()
 	defer s.closeRW.Unlock()
-
+	if s.isClosed {
+		return nil
+	}
 	var tasks []Task
 	for i := 0; i < len(s.taskQueue); i++ {
 		task := <-s.taskQueue
@@ -156,4 +158,26 @@ func (s *SimpleQueue) Copy() []Task {
 		s.taskQueue <- task
 	}
 	return tasks
+}
+
+func (s *SimpleQueue) Save(f func(Task)) {
+	s.closeRW.Lock()
+	if s.isClosed {
+		s.closeRW.Unlock()
+		return
+	}
+	defer func() {
+		s.isClosed = true
+		// wake up the subscribers
+		close(s.taskQueue)
+		s.closeRW.Unlock()
+	}()
+	for {
+		select {
+		case task := <-s.taskQueue:
+			f(task)
+		default:
+			return
+		}
+	}
 }

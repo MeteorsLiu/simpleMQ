@@ -3,6 +3,7 @@ package queue
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,12 +21,13 @@ var (
 type Task interface {
 	Do() error
 	ID() string
-	IsRunUntilSuccess() bool
 	Stop()
 	IsDone() bool
 	OnDone(...func())
 	Wait()
 	String() string
+	IsRunUntilSuccess() bool
+	IsReachLimits() bool
 }
 type TaskOptions func(*TaskEntry)
 type TaskFunc func() error
@@ -37,6 +39,8 @@ type TaskEntry struct {
 	taskErr         error
 	retryFunc       RetryFunc
 	retryLimit      int
+	fails           atomic.Int32
+	failLimit       int32
 	stop            context.Context
 	doStop          context.CancelFunc
 	onTaskDone      []func()
@@ -117,12 +121,19 @@ func WithOnTaskDone(f func()) TaskOptions {
 	}
 }
 
+func WithFailLimits(limits int) TaskOptions {
+	return func(te *TaskEntry) {
+		te.failLimit = int32(limits)
+	}
+}
+
 func NewTask(task TaskFunc, opts ...TaskOptions) Task {
 	t := &TaskEntry{
 		task:            task,
 		runUntilSuccess: true,
 		retryLimit:      DefaultRetryLimit,
 		retryFunc:       DefaultRetry(),
+		failLimit:       DefaultRetryLimit,
 	}
 
 	for _, o := range opts {
@@ -134,6 +145,7 @@ func NewTask(task TaskFunc, opts ...TaskOptions) Task {
 	if t.id == "" {
 		t.id = uuid.NewString()
 	}
+
 	return t
 }
 
@@ -187,4 +199,8 @@ func (t *TaskEntry) Wait() {
 
 func (t *TaskEntry) String() string {
 	return t.ID()
+}
+
+func (t *TaskEntry) IsReachLimits() bool {
+	return t.fails.Add(1) >= t.failLimit
 }

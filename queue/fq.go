@@ -80,3 +80,7 @@ func (f *FairQueue) Pop() (Task, error) {
 func (f *FairQueue) Copy() []Task {
 	return nil
 }
+
+func (f *FairQueue) Save(_ func(Task)) {
+
+}

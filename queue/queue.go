@@ -19,6 +19,9 @@ type Queue interface {
 	Len() int
 	Free() int
 	Copy() []Task
+	// Save() acts like Copy()
+	// but it only allows to call once.
+	Save(func(Task))
 }
 
 type Options func(queue Queue)
