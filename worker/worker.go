@@ -70,7 +70,7 @@ func (w *Worker) Run(idx int) {
 }
 
 func (w *Worker) Publish(task queue.Task, callback ...func()) bool {
-	if w.IsBusy() && len(w.sem) < cap(w.sem) {
+	if w.IsBusy() {
 		select {
 		case w.sem <- struct{}{}:
 			go w.Run(len(w.sem))
@@ -108,5 +108,5 @@ func (w *Worker) SetQueue(q queue.Queue) {
 }
 
 func (w *Worker) IsBusy() bool {
-	return w.workerQueue.Free() < cap(w.sem)
+	return w.workerQueue.Free() < cap(w.sem) || w.workerQueue.Len() > w.Working()
 }
