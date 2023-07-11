@@ -73,10 +73,12 @@ func (s *SimpleQueue) IsClosed() bool {
 
 // close wait until all tasks are executed.
 func (s *SimpleQueue) Close() {
+	// wake up the subscribers
+	// don't lock first,
+	// close first to avoid deadlock when the queue is empty.
+	close(s.taskQueue)
 	s.closeRW.Lock()
 	s.isClosed = true
-	// wake up the subscribers
-	close(s.taskQueue)
 	s.closeRW.Unlock()
 }
 
