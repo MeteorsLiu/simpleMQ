@@ -3,6 +3,7 @@ package queue
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -43,6 +44,7 @@ type TaskEntry struct {
 	failLimit       int32
 	stop            context.Context
 	doStop          context.CancelFunc
+	stopOnce        sync.Once
 	onTaskDone      []func()
 	runUntilSuccess bool
 }
@@ -154,11 +156,13 @@ func (t *TaskEntry) Do() error {
 	case <-t.stop.Done():
 		return ErrTaskStopped
 	default:
-		if err := t.task(); err != nil {
-			// saved the error for the fail fast case.
-			t.taskErr = err
-			if err = t.retryFunc(t); err != nil {
-				return err
+		if !t.IsReachLimits() {
+			if err := t.task(); err != nil {
+				// saved the error for the fail fast case.
+				t.taskErr = err
+				if err = t.retryFunc(t); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -166,10 +170,15 @@ func (t *TaskEntry) Do() error {
 	return nil
 }
 func (t *TaskEntry) Stop() {
-	for _, f := range t.onTaskDone {
-		f()
+	if !t.IsDone() {
+		// prevent the stop race.
+		t.stopOnce.Do(func() {
+			for _, f := range t.onTaskDone {
+				f()
+			}
+			t.doStop()
+		})
 	}
-	t.doStop()
 }
 
 func (t *TaskEntry) ID() string {
@@ -202,5 +211,5 @@ func (t *TaskEntry) String() string {
 }
 
 func (t *TaskEntry) IsReachLimits() bool {
-	return t.fails.Add(1) >= t.failLimit
+	return t.fails.Add(1) > t.failLimit
 }

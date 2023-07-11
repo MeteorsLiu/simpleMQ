@@ -60,3 +60,13 @@ task := r.Dispath(func () error {
 
 task.Wait()
 ```
+
+## Dispath the task to a specifc router path
+```
+// dispath a task
+task := r.DispathPath("/red", func () error {
+    time.Sleep(5*time.Second)
+    fmt.Println("Hello")
+    return nil
+})
+```

@@ -10,7 +10,6 @@ import (
 type Worker struct {
 	workerQueue queue.Queue
 	pollMap     *queue.PollTask
-	kill        chan struct{}
 	sem         chan struct{}
 	working     atomic.Int64
 	enablePoll  bool
@@ -19,7 +18,6 @@ type Worker struct {
 func NewWorker(n, spwan int, q queue.Queue, enablePoll ...bool) *Worker {
 	w := &Worker{
 		workerQueue: q,
-		kill:        make(chan struct{}, n),
 		sem:         make(chan struct{}, n),
 	}
 	if len(enablePoll) > 0 {
@@ -35,50 +33,49 @@ func NewWorker(n, spwan int, q queue.Queue, enablePoll ...bool) *Worker {
 	return w
 }
 
+func (w *Worker) handleTask(idx int, task queue.Task) {
+	w.working.Add(1)
+	defer w.working.Add(-1)
+
+	if err := task.Do(); err != nil && err != queue.ErrTaskStopped {
+		log.Printf("Worker ID: %d Execute Task: %s Fail: %v",
+			idx,
+			task.ID(),
+			err,
+		)
+		if task.IsRunUntilSuccess() &&
+			!w.workerQueue.IsClosed() {
+			log.Printf("Task: %s is going to re-run", task.ID())
+			w.workerQueue.Publish(task)
+			return
+		}
+	}
+
+	task.Stop()
+}
+
 func (w *Worker) Run(idx int) {
 	defer func() { <-w.sem }()
 
 	for {
-		select {
-		case <-w.kill:
+		task, err := w.workerQueue.Pop()
+		if err != nil {
 			return
-		default:
-			task, err := w.workerQueue.Pop()
-			if err != nil {
-				return
-			}
-			if task.IsDone() {
-				continue
-			}
-			w.working.Add(1)
-			if err := task.Do(); err != nil {
-				log.Printf("Worker ID: %d Execute Task: %s Fail: %v",
-					idx,
-					task.ID(),
-					err,
-				)
-				if task.IsRunUntilSuccess() {
-					if !task.IsDone() && !w.workerQueue.IsClosed() {
-						log.Printf("Task: %s is going to re-run", task.ID())
-						w.workerQueue.Publish(task)
-					}
-				} else {
-					if err != queue.ErrTaskStopped {
-						// run once
-						task.Stop()
-					}
-				}
-			}
-			w.working.Add(-1)
 		}
+		if task.IsDone() {
+			continue
+		}
+		w.handleTask(idx, task)
 	}
 }
 
 func (w *Worker) Publish(task queue.Task, callback ...func()) bool {
-	select {
-	case w.sem <- struct{}{}:
-		go w.Run(len(w.sem))
-	default:
+	if w.IsBusy() {
+		select {
+		case w.sem <- struct{}{}:
+			go w.Run(len(w.sem))
+		default:
+		}
 	}
 	// all the callback function should be registered
 	// before it starts to run!
@@ -93,14 +90,7 @@ func (w *Worker) Publish(task queue.Task, callback ...func()) bool {
 	return w.workerQueue.Publish(task)
 }
 
-func (w *Worker) Killn(n int) {
-	for i := 0; i < n; i++ {
-		w.kill <- struct{}{}
-	}
-}
-
 func (w *Worker) Stop() {
-	w.Killn(cap(w.sem))
 	w.workerQueue.Close()
 }
 

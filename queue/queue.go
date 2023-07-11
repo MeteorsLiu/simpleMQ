@@ -6,6 +6,12 @@ var (
 	ErrQueueClosed = fmt.Errorf("queue is closed")
 )
 
+func WithSimpleQueueCap(cap int) Options {
+	return func(queue Queue) {
+		queue.Resize(cap)
+	}
+}
+
 type Queue interface {
 	IsClosed() bool
 	Publish(Task) bool

@@ -1,17 +1,18 @@
 package router
 
 import (
-	"math/rand"
 	"sync"
 
 	"github.com/MeteorsLiu/rand"
 	"github.com/MeteorsLiu/simpleMQ/queue"
 	"github.com/MeteorsLiu/simpleMQ/worker"
+	"github.com/alphadose/haxmap"
 )
 
 const (
 	DefaultWorkerSize      = 100
 	DefaultWorkerSpwanSize = 10
+	DefaultWorkerCap       = 10
 )
 
 type Options func(*Router)
@@ -47,21 +48,19 @@ type Router struct {
 	workersCap      int
 	workers         []*worker.Worker
 	newQueueFunc    queue.NewQueue
+	routerPath      *haxmap.Map[string, *worker.Worker]
 }
 
 func NewRouter(opts ...Options) *Router {
-	r := &Router{}
+	r := &Router{
+		workerSize:      DefaultWorkerSize,
+		workerSpawnSize: DefaultWorkerSpwanSize,
+		newQueueFunc:    queue.NewSimpleQueue,
+		workersCap:      DefaultWorkerCap,
+		routerPath:      haxmap.New[string, *worker.Worker](),
+	}
 	for _, o := range opts {
 		o(r)
-	}
-	if r.workerSize == 0 {
-		r.workerSize = DefaultWorkerSize
-	}
-	if r.workerSpawnSize == 0 {
-		r.workerSpawnSize = DefaultWorkerSpwanSize
-	}
-	if r.newQueueFunc == nil {
-		r.newQueueFunc = queue.NewSimpleQueue
 	}
 	// new one for the task
 	r.setupWorker()
@@ -80,26 +79,22 @@ func (r *Router) setupWorker() *worker.Worker {
 	return newWorker
 }
 
+func (r *Router) getWorkerBy(name string) *worker.Worker {
+	routerWorker, ok := r.routerPath.Get(name)
+	if !ok {
+		routerWorker = worker.NewWorker(r.workerSize, r.workerSpawnSize, r.newQueueFunc(), true)
+		r.routerPath.Set(name, routerWorker)
+	}
+	return routerWorker
+}
+
 func (r *Router) findWorker() *worker.Worker {
-	var randomSelected *worker.Worker
-
-	r.RLock()
-	for _, w := range r.workers {
-		if !w.IsBusy() {
-			r.RUnlock()
-			return w
-		}
-	}
-	if len(r.workers) > 0 {
-		randomSelected = r.workers[rand.Intn(len(r.workers))]
-	}
-	r.RUnlock()
-
 	if tryNew := r.setupWorker(); tryNew != nil {
 		return tryNew
 	}
-
-	return randomSelected
+	r.RLock()
+	defer r.RUnlock()
+	return r.workers[rand.Intn(len(r.workers))]
 }
 
 func (r *Router) killTask(id string) {
@@ -123,14 +118,29 @@ func (r *Router) DispatchTask(f queue.Task) {
 	r.findWorker().Publish(f)
 }
 
+func (r *Router) DispatchPath(path string, f func() error, callback ...func()) queue.Task {
+	task := queue.NewTask(f)
+	r.getWorkerBy(path).Publish(task, callback...)
+	return task
+}
+
+func (r *Router) DispatchPathTask(path string, task queue.Task) {
+	r.getWorkerBy(path).Publish(task)
+}
+
 func (r *Router) StopByID(id string) {
 	r.killTask(id)
 }
 
 func (r *Router) Stop() {
 	r.RLock()
-	defer r.RUnlock()
 	for _, w := range r.workers {
 		w.Stop()
 	}
+	r.RUnlock()
+
+	r.routerPath.ForEach(func(_ string, w *worker.Worker) bool {
+		w.Stop()
+		return true
+	})
 }

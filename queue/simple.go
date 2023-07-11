@@ -14,12 +14,6 @@ type SimpleQueue struct {
 	taskQueue chan Task
 }
 
-func WithSimpleQueueCap(cap int) Options {
-	return func(queue Queue) {
-		queue.Resize(cap)
-	}
-}
-
 func NewSimpleQueue(opts ...Options) Queue {
 	s := &SimpleQueue{}
 	for _, o := range opts {
@@ -162,15 +156,14 @@ func (s *SimpleQueue) Copy() []Task {
 
 func (s *SimpleQueue) Save(f func(Task)) {
 	s.closeRW.Lock()
+	defer s.closeRW.Unlock()
 	if s.isClosed {
-		s.closeRW.Unlock()
 		return
 	}
 	defer func() {
 		s.isClosed = true
 		// wake up the subscribers
 		close(s.taskQueue)
-		s.closeRW.Unlock()
 	}()
 	for {
 		select {
