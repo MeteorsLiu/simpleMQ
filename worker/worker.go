@@ -70,7 +70,7 @@ func (w *Worker) Run(idx int) {
 }
 
 func (w *Worker) Publish(task queue.Task, callback ...func()) bool {
-	if w.IsBusy() {
+	if w.IsBusy() && len(w.sem) < cap(w.sem) {
 		select {
 		case w.sem <- struct{}{}:
 			go w.Run(len(w.sem))
