@@ -115,7 +115,9 @@ func (w *Worker) Publish(task queue.Task, callback ...queue.Finalizer) bool {
 
 func (w *Worker) Stop() {
 	w.Wait(5 * time.Second)
-	w.workerQueue.Close()
+	if w.workerQueue != nil {
+		w.workerQueue.Close()
+	}
 }
 
 func (w *Worker) KillTask(id string) error {
