@@ -26,7 +26,7 @@ func NewPoll() *PollTask {
 
 func (p *PollTask) Register(pb Pollable) {
 	p.m.Set(pb.ID(), pb)
-	pb.OnDone(func() {
+	pb.OnDone(func(_ bool, _ Task) {
 		p.Remove(pb)
 	})
 }
@@ -52,7 +52,7 @@ func (p *PollTask) Poll(f func(string, Pollable)) {
 	})
 }
 
-func (p *PollTask) Callback(id string, f func()) error {
+func (p *PollTask) Callback(id string, f Finalizer) error {
 	pb, ok := p.m.Get(id)
 	if !ok {
 		return ErrPollableEventsNotExists
@@ -66,10 +66,14 @@ func (p *PollTask) Kill(id string) error {
 	if !ok {
 		return ErrPollableEventsNotExists
 	}
-	pb.Stop()
+	pb.Interrupt()
 	return nil
 }
 
 func (p *PollTask) Get(id string) (Pollable, bool) {
 	return p.m.Get(id)
+}
+
+func (p *PollTask) ForEach(f func(string, Pollable) bool) {
+	p.m.ForEach(f)
 }

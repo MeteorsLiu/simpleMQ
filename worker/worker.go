@@ -2,7 +2,9 @@ package worker
 
 import (
 	"log"
+	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/MeteorsLiu/simpleMQ/queue"
 )
@@ -13,48 +15,63 @@ type Worker struct {
 	sem         chan struct{}
 	working     atomic.Int64
 	enablePoll  bool
+	unlimited   bool
 }
 
 func NewWorker(n, spwan int, q queue.Queue, enablePoll ...bool) *Worker {
 	w := &Worker{
 		workerQueue: q,
-		sem:         make(chan struct{}, n),
+		unlimited:   spwan <= 0 || n <= 0,
 	}
-	if len(enablePoll) > 0 {
-		if enablePoll[0] {
-			w.enablePoll = true
-			w.pollMap = queue.NewPoll()
-		}
+	if n > 0 {
+		w.sem = make(chan struct{}, n)
+	}
+	if len(enablePoll) > 0 && enablePoll[0] {
+		w.enablePoll = true
+		w.pollMap = queue.NewPoll()
 	}
 	for i := 0; i < spwan; i++ {
 		w.sem <- struct{}{}
-		go w.Run(i + 1)
+		go w.Run()
 	}
+
 	return w
 }
 
-func (w *Worker) handleTask(idx int, task queue.Task) {
-	w.working.Add(1)
+func (w *Worker) handleTask(task queue.Task) {
+	idx := w.working.Add(1)
 	defer w.working.Add(-1)
-
-	if err := task.Do(); err != nil && err != queue.ErrTaskStopped {
+	var err error
+	for {
+		err = task.Do()
+		if err == nil ||
+			err == queue.ErrTaskStopped ||
+			err == queue.ErrRetryReachLimits ||
+			err == queue.ErrQueueClosed ||
+			!task.IsRunUntilSuccess() {
+			break
+		}
 		log.Printf("Worker ID: %d Execute Task: %s Fail: %v",
 			idx,
 			task.ID(),
 			err,
 		)
-		if task.IsRunUntilSuccess() &&
-			!w.workerQueue.IsClosed() {
-			log.Printf("Task: %s is going to re-run", task.ID())
+		log.Printf("Task: %s is going to re-run", task.ID())
+		// workerQueue can be nil when worker is in unlimited mode.
+		if !w.unlimited && !w.workerQueue.IsClosed() {
 			w.workerQueue.Publish(task)
 			return
 		}
 	}
 
-	task.Stop()
+	if err != nil {
+		task.Interrupt()
+	} else {
+		task.Stop()
+	}
 }
 
-func (w *Worker) Run(idx int) {
+func (w *Worker) Run() {
 	defer func() { <-w.sem }()
 
 	for {
@@ -65,24 +82,30 @@ func (w *Worker) Run(idx int) {
 		if task.IsDone() {
 			continue
 		}
-		w.handleTask(idx, task)
+		w.handleTask(task)
 	}
 }
 
-func (w *Worker) Publish(task queue.Task, callback ...func()) bool {
+func (w *Worker) Publish(task queue.Task, callback ...queue.Finalizer) bool {
+	if w.enablePoll {
+		w.pollMap.Register(task)
+	}
+
+	if w.unlimited {
+		task.OnDone(callback...)
+		go w.handleTask(task)
+		return true
+	}
+
 	if w.IsBusy() {
 		select {
 		case w.sem <- struct{}{}:
-			go w.Run(len(w.sem))
+			go w.Run()
 		default:
 		}
 	}
 	// all the callback function should be registered
 	// before it starts to run!
-
-	if w.enablePoll {
-		w.pollMap.Register(task)
-	}
 
 	if len(callback) > 0 {
 		task.OnDone(callback...)
@@ -91,6 +114,7 @@ func (w *Worker) Publish(task queue.Task, callback ...func()) bool {
 }
 
 func (w *Worker) Stop() {
+	w.Wait(5 * time.Second)
 	w.workerQueue.Close()
 }
 
@@ -109,4 +133,26 @@ func (w *Worker) SetQueue(q queue.Queue) {
 
 func (w *Worker) IsBusy() bool {
 	return w.workerQueue.Free() < cap(w.sem) || w.workerQueue.Len() > w.Working()
+}
+
+func (w *Worker) Wait(timeout ...time.Duration) {
+	if !w.enablePoll {
+		return
+	}
+	var wg sync.WaitGroup
+	w.pollMap.ForEach(func(_ string, p queue.Pollable) bool {
+		wg.Add(1)
+		go func(task queue.Task) {
+			defer wg.Done()
+			if len(timeout) > 0 {
+				timer := time.AfterFunc(timeout[0], func() {
+					p.Interrupt()
+				})
+				defer timer.Stop()
+			}
+			p.Wait()
+		}(p)
+		return true
+	})
+	wg.Wait()
 }

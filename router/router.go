@@ -108,7 +108,7 @@ func (r *Router) killTask(id string) {
 	}
 }
 
-func (r *Router) Dispatch(f func() error, callback ...func()) queue.Task {
+func (r *Router) Dispatch(f func() error, callback ...queue.Finalizer) queue.Task {
 	task := queue.NewTask(f)
 	r.findWorker().Publish(task, callback...)
 	return task
@@ -118,7 +118,7 @@ func (r *Router) DispatchTask(f queue.Task) {
 	r.findWorker().Publish(f)
 }
 
-func (r *Router) DispatchPath(path string, f func() error, callback ...func()) queue.Task {
+func (r *Router) DispatchPath(path string, f func() error, callback ...queue.Finalizer) queue.Task {
 	task := queue.NewTask(f)
 	r.getWorkerBy(path).Publish(task, callback...)
 	return task

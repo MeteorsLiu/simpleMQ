@@ -21,10 +21,12 @@ var (
 
 type Task interface {
 	Do() error
+	Error() error
 	ID() string
 	Stop()
+	Interrupt()
 	IsDone() bool
-	OnDone(...func())
+	OnDone(...Finalizer)
 	Wait()
 	String() string
 	IsRunUntilSuccess() bool
@@ -33,6 +35,7 @@ type Task interface {
 type TaskOptions func(*TaskEntry)
 type TaskFunc func() error
 type RetryFunc func(*TaskEntry) error
+type Finalizer func(ok bool, task Task)
 
 type TaskEntry struct {
 	id              string
@@ -45,7 +48,7 @@ type TaskEntry struct {
 	stop            context.Context
 	doStop          context.CancelFunc
 	stopOnce        sync.Once
-	onTaskDone      []func()
+	onTaskDone      []Finalizer
 	runUntilSuccess bool
 }
 
@@ -53,7 +56,7 @@ func DefaultRetry() RetryFunc {
 	return func(tf *TaskEntry) error {
 		sleep := time.NewTicker(time.Second)
 		defer sleep.Stop()
-
+		var err error
 		for i := 0; i < tf.retryLimit; i++ {
 			// may be woken up by stop signal or the ticker.
 			select {
@@ -72,6 +75,7 @@ func DefaultRetry() RetryFunc {
 			// Totally, 1+2+4+8+16+32=63 seconds = 1 Minute 3 Second
 			sleep.Reset(1 << (i + 1) * time.Second)
 		}
+		tf.taskErr = err
 		return ErrRetryReachLimits
 	}
 }
@@ -117,7 +121,7 @@ func WithRunUntilSuccess(RunUntilSuccess bool) TaskOptions {
 	}
 }
 
-func WithOnTaskDone(f func()) TaskOptions {
+func WithOnTaskDone(f Finalizer) TaskOptions {
 	return func(te *TaskEntry) {
 		te.onTaskDone = append(te.onTaskDone, f)
 	}
@@ -156,13 +160,15 @@ func (t *TaskEntry) Do() error {
 	case <-t.stop.Done():
 		return ErrTaskStopped
 	default:
-		if !t.IsReachLimits() {
-			if err := t.task(); err != nil {
-				// saved the error for the fail fast case.
-				t.taskErr = err
-				if err = t.retryFunc(t); err != nil {
-					return err
-				}
+		if t.IsReachLimits() {
+			return ErrRetryReachLimits
+		}
+
+		if err := t.task(); err != nil {
+			// saved the error for the fail fast case.
+			t.taskErr = err
+			if err = t.retryFunc(t); err != nil {
+				return err
 			}
 		}
 	}
@@ -170,15 +176,23 @@ func (t *TaskEntry) Do() error {
 	return nil
 }
 func (t *TaskEntry) Stop() {
-	if !t.IsDone() {
-		// prevent the stop race.
-		t.stopOnce.Do(func() {
-			for _, f := range t.onTaskDone {
-				f()
-			}
-			t.doStop()
-		})
-	}
+	// prevent the stop race.
+	t.stopOnce.Do(func() {
+		for _, f := range t.onTaskDone {
+			f(true, t)
+		}
+		t.doStop()
+	})
+
+}
+
+func (t *TaskEntry) Interrupt() {
+	t.stopOnce.Do(func() {
+		for _, f := range t.onTaskDone {
+			f(false, t)
+		}
+		t.doStop()
+	})
 }
 
 func (t *TaskEntry) ID() string {
@@ -198,7 +212,11 @@ func (t *TaskEntry) IsDone() bool {
 	}
 }
 
-func (t *TaskEntry) OnDone(f ...func()) {
+func (t *TaskEntry) Error() error {
+	return t.taskErr
+}
+
+func (t *TaskEntry) OnDone(f ...Finalizer) {
 	t.onTaskDone = append(t.onTaskDone, f...)
 }
 

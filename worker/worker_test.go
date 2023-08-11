@@ -12,7 +12,7 @@ import (
 
 func TestWorker(t *testing.T) {
 	q := queue.NewSimpleQueue()
-	w := NewWorker(5, q)
+	w := NewWorker(5, 5, q)
 	var cnt atomic.Int64
 	var wg sync.WaitGroup
 	wg.Add(6)
@@ -59,4 +59,29 @@ func TestWorker(t *testing.T) {
 	}()
 	w.Publish(task)
 	time.Sleep(10 * time.Second)
+}
+
+func TestUnlimited(t *testing.T) {
+	w := NewWorker(0, 0, nil, true)
+	t.Log(w.unlimited)
+	var cnt atomic.Int64
+	t1 := time.Now()
+	task := queue.NewTask(func() error {
+		c := cnt.Add(1) - 1
+		if c != 5 {
+			return fmt.Errorf("%d", c)
+		}
+		return nil
+	})
+	w.Publish(task, func(ok bool, task queue.Task) {
+		if ok {
+			// 1+2+4+8+16 = 31s
+			t.Log("retry success", time.Since(t1))
+		} else {
+			// 1+2+4+8+16 = 31s
+			t.Log("retry fail", time.Since(t1))
+		}
+
+	})
+	w.Wait(5 * time.Second)
 }
