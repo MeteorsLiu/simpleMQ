@@ -83,5 +83,22 @@ func TestUnlimited(t *testing.T) {
 		}
 
 	})
+	w.Wait()
+	t1 = time.Now()
+	for i := 0; i < 2000; i++ {
+		w.Publish(queue.NewTask(func() error {
+			time.Sleep(10 * time.Second)
+			return nil
+		}), func(ok bool, task queue.Task) {
+			if ok {
+				// 1+2+4+8+16 = 31s
+				t.Log("retry success", time.Since(t1))
+			} else {
+				// 1+2+4+8+16 = 31s
+				t.Log("retry fail", time.Since(t1))
+			}
+
+		})
+	}
 	w.Wait(5 * time.Second)
 }
