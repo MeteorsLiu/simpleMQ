@@ -86,6 +86,14 @@ func (w *Worker) Run() {
 	}
 }
 
+func (w *Worker) PublishSync(task queue.Task, callback ...queue.Finalizer) error {
+	if w.enablePoll {
+		w.pollMap.Register(task)
+	}
+	task.OnDone(callback...)
+	return task.Do()
+}
+
 func (w *Worker) Publish(task queue.Task, callback ...queue.Finalizer) bool {
 	if w.enablePoll {
 		w.pollMap.Register(task)
