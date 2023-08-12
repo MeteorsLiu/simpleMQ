@@ -83,6 +83,7 @@ func DefaultRetry() RetryFunc {
 // fail fast.
 func WithNoRetryFunc() TaskOptions {
 	return func(te *TaskEntry) {
+		te.failLimit = 1
 		te.retryFunc = func(te *TaskEntry) error {
 			return te.taskErr
 		}
@@ -129,7 +130,9 @@ func WithOnTaskDone(f Finalizer) TaskOptions {
 
 func WithFailLimits(limits int) TaskOptions {
 	return func(te *TaskEntry) {
-		te.failLimit = int32(limits)
+		if te.failLimit == DefaultRetryLimit {
+			te.failLimit = int32(limits)
+		}
 	}
 }
 
