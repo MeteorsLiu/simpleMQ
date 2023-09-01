@@ -32,7 +32,9 @@ type Task interface {
 	IsRunUntilSuccess() bool
 	IsReachLimits() bool
 	SetError(error)
+	TaskContext() *sync.Map
 }
+
 type TaskOptions func(*TaskEntry)
 type TaskFunc func() error
 type RetryFunc func(*TaskEntry) error
@@ -42,6 +44,7 @@ type TaskEntry struct {
 	id              string
 	task            TaskFunc
 	taskErr         error
+	taskCtx         sync.Map
 	retryFunc       RetryFunc
 	retryLimit      int
 	fails           atomic.Int32
@@ -182,25 +185,29 @@ func (t *TaskEntry) Do() error {
 func (t *TaskEntry) Stop() {
 	// prevent the stop race.
 	t.stopOnce.Do(func() {
+		t.doStop()
 		for _, f := range t.onTaskDone {
 			f(true, t)
 		}
-		t.doStop()
 	})
 
+}
+
+func (t *TaskEntry) Interrupt() {
+	t.stopOnce.Do(func() {
+		t.doStop()
+		for _, f := range t.onTaskDone {
+			f(false, t)
+		}
+	})
 }
 
 func (t *TaskEntry) SetError(err error) {
 	t.taskErr = err
 }
 
-func (t *TaskEntry) Interrupt() {
-	t.stopOnce.Do(func() {
-		for _, f := range t.onTaskDone {
-			f(false, t)
-		}
-		t.doStop()
-	})
+func (t *TaskEntry) TaskContext() *sync.Map {
+	return &t.taskCtx
 }
 
 func (t *TaskEntry) ID() string {
