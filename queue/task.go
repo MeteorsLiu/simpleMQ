@@ -56,6 +56,7 @@ type TaskEntry struct {
 	onTaskDone      []Finalizer
 	running         sync.Mutex
 	runUntilSuccess bool
+	requireLock     bool
 }
 
 func DefaultRetry() RetryFunc {
@@ -104,6 +105,12 @@ func WithNoRetryFunc() TaskOptions {
 func WithRetryFunc(retry RetryFunc) TaskOptions {
 	return func(te *TaskEntry) {
 		te.retryFunc = retry
+	}
+}
+
+func LockRequired() TaskOptions {
+	return func(te *TaskEntry) {
+		te.requireLock = true
 	}
 }
 
@@ -176,6 +183,11 @@ func (t *TaskEntry) Do() error {
 	default:
 		if t.IsReachLimits() {
 			return ErrRetryReachLimits
+		}
+		// most case it wounldn't need
+		if t.requireLock {
+			t.running.Lock()
+			defer t.running.Unlock()
 		}
 		if err := t.task(); err != nil {
 			// saved the error for the fail fast case.
