@@ -22,6 +22,7 @@ var (
 type Task interface {
 	Do() error
 	Error() error
+	TaskError() error
 	ID() string
 	Stop()
 	Interrupt()
@@ -31,7 +32,7 @@ type Task interface {
 	String() string
 	IsRunUntilSuccess() bool
 	IsReachLimits() bool
-	SetError(error)
+	SetTaskError(error)
 	TaskContext() *sync.Map
 }
 
@@ -53,6 +54,7 @@ type TaskEntry struct {
 	doStop          context.CancelFunc
 	stopOnce        sync.Once
 	onTaskDone      []Finalizer
+	running         sync.Mutex
 	runUntilSuccess bool
 }
 
@@ -85,10 +87,15 @@ func DefaultRetry() RetryFunc {
 }
 
 // fail fast.
+// which promises the task will run once.
 func WithNoRetryFunc() TaskOptions {
 	return func(te *TaskEntry) {
 		te.failLimit = 1
+		te.runUntilSuccess = false
 		te.retryFunc = func(te *TaskEntry) error {
+			if te.taskErr != nil {
+				te.Interrupt()
+			}
 			return te.taskErr
 		}
 	}
@@ -170,7 +177,6 @@ func (t *TaskEntry) Do() error {
 		if t.IsReachLimits() {
 			return ErrRetryReachLimits
 		}
-
 		if err := t.task(); err != nil {
 			// saved the error for the fail fast case.
 			t.taskErr = err
@@ -202,8 +208,15 @@ func (t *TaskEntry) Interrupt() {
 	})
 }
 
-func (t *TaskEntry) SetError(err error) {
-	t.taskErr = err
+func (t *TaskEntry) SetTaskError(err error) {
+	t.taskCtx.Store("err", err)
+}
+
+func (t *TaskEntry) TaskError() error {
+	if err, ok := t.taskCtx.Load("err"); ok {
+		return err.(error)
+	}
+	return nil
 }
 
 func (t *TaskEntry) TaskContext() *sync.Map {

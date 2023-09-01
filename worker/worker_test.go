@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -101,4 +102,28 @@ func TestUnlimited(t *testing.T) {
 		})
 	}
 	w.Wait(5 * time.Second)
+}
+
+func TestWorkerOnce(t *testing.T) {
+	w := NewWorker(0, 0, nil)
+	neverStop := queue.NewTask(func() error {
+		t.Log("run once")
+		return errors.New("nerver stop")
+	}, queue.WithNoRetryFunc())
+
+	w.Publish(neverStop)
+
+	neverStop.Wait()
+}
+
+func TestWorkerSync(t *testing.T) {
+	w := NewWorker(0, 0, nil)
+	task := queue.NewTask(func() error {
+		t.Log("run once")
+		return nil
+	})
+
+	w.PublishSync(task)
+
+	t.Log(task.IsDone())
 }

@@ -56,6 +56,10 @@ func (w *Worker) handleTask(task queue.Task) {
 			task.ID(),
 			err,
 		)
+		// interrupted by fail fast
+		if task.IsDone() {
+			return
+		}
 		log.Printf("Task: %s is going to re-run", task.ID())
 		// workerQueue can be nil when worker is in unlimited mode.
 		if !w.unlimited && !w.workerQueue.IsClosed() {
@@ -66,8 +70,6 @@ func (w *Worker) handleTask(task queue.Task) {
 
 	if err != nil {
 		task.Interrupt()
-	} else {
-		task.Stop()
 	}
 }
 
@@ -91,7 +93,31 @@ func (w *Worker) PublishSync(task queue.Task, callback ...queue.Finalizer) error
 		w.pollMap.Register(task)
 	}
 	task.OnDone(callback...)
-	return task.Do()
+	if err := task.Do(); err != nil {
+		task.Interrupt()
+	}
+
+	return nil
+}
+
+func (w *Worker) PublishSyncTimeout(task queue.Task, timeout time.Duration, callback ...queue.Finalizer) error {
+	if w.enablePoll {
+		w.pollMap.Register(task)
+	}
+	task.OnDone(callback...)
+	timer := time.AfterFunc(timeout, func() {
+		task.Interrupt()
+	})
+	defer timer.Stop()
+	go func() {
+		if err := task.Do(); err != nil {
+			task.Interrupt()
+		}
+	}()
+
+	task.Wait()
+
+	return nil
 }
 
 func (w *Worker) Publish(task queue.Task, callback ...queue.Finalizer) bool {
