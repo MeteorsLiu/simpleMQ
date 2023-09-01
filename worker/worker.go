@@ -46,7 +46,7 @@ func (w *Worker) handleTask(task queue.Task) {
 		err = task.Do()
 		if err == nil ||
 			err == queue.ErrTaskStopped ||
-			err == queue.ErrRetryReachLimits ||
+			err == queue.ErrFailReachLimits ||
 			err == queue.ErrQueueClosed ||
 			!task.IsRunUntilSuccess() {
 			break
@@ -68,7 +68,7 @@ func (w *Worker) handleTask(task queue.Task) {
 		}
 	}
 
-	if err != nil {
+	if err != nil && err != queue.ErrTaskStopped {
 		task.Interrupt()
 	}
 }
@@ -93,10 +93,7 @@ func (w *Worker) PublishSync(task queue.Task, callback ...queue.Finalizer) error
 		w.pollMap.Register(task)
 	}
 	task.OnDone(callback...)
-	if err := task.Do(); err != nil {
-		task.Interrupt()
-	}
-
+	w.handleTask(task)
 	return nil
 }
 
@@ -109,11 +106,7 @@ func (w *Worker) PublishSyncTimeout(task queue.Task, timeout time.Duration, call
 		task.Interrupt()
 	})
 	defer timer.Stop()
-	go func() {
-		if err := task.Do(); err != nil {
-			task.Interrupt()
-		}
-	}()
+	go w.handleTask(task)
 
 	task.Wait()
 

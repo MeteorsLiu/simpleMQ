@@ -16,7 +16,7 @@ func TestWorker(t *testing.T) {
 	w := NewWorker(5, 5, q)
 	var cnt atomic.Int64
 	var wg sync.WaitGroup
-	wg.Add(6)
+	wg.Add(1)
 	w.Publish(queue.NewTask(func() error {
 		defer wg.Done()
 		c := cnt.Add(1) - 1
@@ -36,12 +36,13 @@ func TestWorker(t *testing.T) {
 		defer wg1.Done()
 		c := cnt.Add(1) - 1
 		if c != 5 {
+			t.Log("retry fail", time.Since(t1))
 			return fmt.Errorf("%d", c)
 		}
 		// 1+2+4+8+16 = 31s
 		t.Log("retry success", time.Since(t1))
 		return nil
-	}))
+	}, queue.WithRetryLimit(3)))
 	wg1.Wait()
 	t1 = time.Now()
 	task := queue.NewTask(func() error {
@@ -126,4 +127,14 @@ func TestWorkerSync(t *testing.T) {
 	w.PublishSync(task)
 
 	t.Log(task.IsDone())
+}
+
+func TestWorkerSyncOnce(t *testing.T) {
+	w := NewWorker(0, 0, nil)
+	neverStop := queue.NewTask(func() error {
+		t.Log("run once")
+		return errors.New("nerver stop")
+	}, queue.WithNoRetryFunc())
+
+	w.PublishSync(neverStop)
 }

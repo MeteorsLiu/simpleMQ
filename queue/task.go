@@ -17,6 +17,7 @@ const (
 var (
 	ErrTaskStopped      = fmt.Errorf("task is stopped")
 	ErrRetryReachLimits = fmt.Errorf("retry reaches limits")
+	ErrFailReachLimits  = fmt.Errorf("fails reaches limits")
 )
 
 type Task interface {
@@ -182,7 +183,7 @@ func (t *TaskEntry) Do() error {
 		return ErrTaskStopped
 	default:
 		if t.IsReachLimits() {
-			return ErrRetryReachLimits
+			return ErrFailReachLimits
 		}
 		// most case it wounldn't need
 		if t.requireLock {
