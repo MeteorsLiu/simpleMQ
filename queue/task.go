@@ -31,6 +31,7 @@ type Task interface {
 	String() string
 	IsRunUntilSuccess() bool
 	IsReachLimits() bool
+	SetError(error)
 }
 type TaskOptions func(*TaskEntry)
 type TaskFunc func() error
@@ -187,6 +188,10 @@ func (t *TaskEntry) Stop() {
 		t.doStop()
 	})
 
+}
+
+func (t *TaskEntry) SetError(err error) {
+	t.taskErr = err
 }
 
 func (t *TaskEntry) Interrupt() {
