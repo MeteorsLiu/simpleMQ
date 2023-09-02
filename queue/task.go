@@ -96,7 +96,7 @@ func WithNoRetryFunc() TaskOptions {
 		te.runUntilSuccess = false
 		te.retryFunc = func(te *TaskEntry) error {
 			if te.taskErr != nil {
-				te.Interrupt()
+				te.Stop()
 			}
 			return te.taskErr
 		}

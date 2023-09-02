@@ -69,7 +69,11 @@ func (w *Worker) handleTask(task queue.Task) {
 	}
 
 	if err != nil && err != queue.ErrTaskStopped {
-		task.Interrupt()
+		if err == queue.ErrQueueClosed {
+			task.Interrupt()
+		} else {
+			task.Stop()
+		}
 	}
 }
 
