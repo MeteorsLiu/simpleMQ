@@ -107,7 +107,7 @@ func (w *Worker) PublishSyncTimeout(task queue.Task, timeout time.Duration, call
 	}
 	task.OnDone(callback...)
 	timer := time.AfterFunc(timeout, func() {
-		task.Interrupt()
+		task.Stop()
 	})
 	defer timer.Stop()
 	go w.handleTask(task)
@@ -183,7 +183,7 @@ func (w *Worker) Wait(timeout ...time.Duration) {
 				})
 				defer timer.Stop()
 			}
-			p.Wait()
+			task.Wait()
 		}(p)
 		return true
 	})
