@@ -28,7 +28,10 @@ type Task interface {
 	Stop()
 	Interrupt()
 	IsDone() bool
+	// The action function when tasks is stop or interrputed.
 	OnDone(...Finalizer)
+	// The action function when tasks run fail.
+	OnFail(...Failure)
 	Wait()
 	String() string
 	IsRunUntilSuccess() bool
@@ -41,7 +44,7 @@ type TaskOptions func(*TaskEntry)
 type TaskFunc func() error
 type RetryFunc func(*TaskEntry) error
 type Finalizer func(ok bool, task Task)
-
+type Failure func(fail int, task Task)
 type TaskEntry struct {
 	id              string
 	task            TaskFunc
@@ -55,6 +58,7 @@ type TaskEntry struct {
 	doStop          context.CancelFunc
 	stopOnce        sync.Once
 	onTaskDone      []Finalizer
+	onTaskFail      []Failure
 	running         sync.Mutex
 	runUntilSuccess bool
 	requireLock     bool
@@ -147,6 +151,12 @@ func WithOnTaskDone(f Finalizer) TaskOptions {
 	}
 }
 
+func WithOnTaskFail(f Failure) TaskOptions {
+	return func(te *TaskEntry) {
+		te.onTaskFail = append(te.onTaskFail, f)
+	}
+}
+
 func WithFailLimits(limits int) TaskOptions {
 	return func(te *TaskEntry) {
 		if te.failLimit == DefaultRetryLimit {
@@ -182,7 +192,8 @@ func (t *TaskEntry) Do() error {
 	case <-t.stop.Done():
 		return ErrTaskStopped
 	default:
-		if t.IsReachLimits() {
+		currentCnt := t.fails.Add(1)
+		if currentCnt > t.failLimit {
 			return ErrFailReachLimits
 		}
 		// most case it wounldn't need
@@ -194,6 +205,9 @@ func (t *TaskEntry) Do() error {
 			// saved the error for the fail fast case.
 			t.taskErr = err
 			if err = t.retryFunc(t); err != nil {
+				for _, fail := range t.onTaskFail {
+					fail(int(currentCnt), t)
+				}
 				return err
 			}
 		}
@@ -259,6 +273,10 @@ func (t *TaskEntry) Error() error {
 
 func (t *TaskEntry) OnDone(f ...Finalizer) {
 	t.onTaskDone = append(t.onTaskDone, f...)
+}
+
+func (t *TaskEntry) OnFail(f ...Failure) {
+	t.onTaskFail = append(t.onTaskFail, f...)
 }
 
 func (t *TaskEntry) Wait() {
