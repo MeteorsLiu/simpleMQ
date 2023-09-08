@@ -179,7 +179,7 @@ func (w *Worker) Wait(timeout ...time.Duration) {
 			defer wg.Done()
 			if len(timeout) > 0 {
 				timer := time.AfterFunc(timeout[0], func() {
-					p.Interrupt()
+					task.Interrupt()
 				})
 				defer timer.Stop()
 			}
