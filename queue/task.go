@@ -288,5 +288,5 @@ func (t *TaskEntry) String() string {
 }
 
 func (t *TaskEntry) IsReachLimits() bool {
-	return t.fails.Add(1) > t.failLimit
+	return t.fails.Load() >= t.failLimit
 }
